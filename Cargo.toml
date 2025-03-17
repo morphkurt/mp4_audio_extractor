@@ -1,0 +1,20 @@
+[package]
+name = "mp4_audio_extractor"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A library for extracting audio from MP4 files"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/mp4_audio_extractor"
+keywords = ["mp4", "audio", "extraction", "media"]
+categories = ["multimedia"]
+
+[dependencies]
+log = "0.4"
+byteorder = "1.4"
+mp4 = "0.14.0"
+
+[dev-dependencies]
+tempfile = "3.3"
+criterion = "0.4"
+env_logger = "0.10"
