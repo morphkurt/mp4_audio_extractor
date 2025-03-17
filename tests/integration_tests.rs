@@ -9,7 +9,9 @@ use common::test_samples;
 
 #[test]
 fn test_extract_audio_from_valid_mp4() {
-    let file_path = test_samples::get_sample_path("sample1.mp4");
+    env_logger::init();
+
+    let file_path = test_samples::get_sample_path("lex.mp4");
     let file = File::open(file_path).unwrap();
     let size = file.metadata().unwrap().len();
     let reader = BufReader::new(file);
