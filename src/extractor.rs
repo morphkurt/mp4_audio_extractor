@@ -20,16 +20,6 @@ pub struct ExtractorConfig {
     pub output_format: String,
 }
 
-impl Default for ExtractorConfig {
-    fn default() -> Self {
-        Self {
-            include_metadata: true,
-            buffer_size: 1024 * 1024, // 1MB default buffer
-            output_format: String::from("mp4"),
-        }
-    }
-}
-
 /// The main extractor struct responsible for extracting audio from MP4 files.
 #[derive(Debug)]
 pub struct Extractor {
