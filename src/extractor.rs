@@ -2,7 +2,6 @@
 
 use mp4::{AacConfig, MediaConfig, MediaType, Mp4Config, Mp4Writer, TrackConfig};
 use std::io::{BufReader, Cursor, Read, Seek};
-use std::time::Instant;
 
 use crate::Error;
 use crate::Result;
@@ -51,7 +50,6 @@ impl Extractor {
         reader: BufReader<R>,
         size: u64,
     ) -> Result<Vec<u8>> {
-        let start_time = Instant::now();
         log::info!("Starting audio extraction from MP4 file of size {} bytes", size);
 
         // Parse the original MP4 file
@@ -104,11 +102,9 @@ impl Extractor {
         writer.write_end()
             .map_err(|e| Error::ParsingError(format!("Failed to finalize MP4 file: {}", e)))?;
 
-        let elapsed = start_time.elapsed();
         log::info!(
-            "Successfully created MP4 data in memory with extracted audio: {} bytes in {:.2?}",
+            "Successfully created MP4 data in memory with extracted audio: {}",
             output_buffer.len(),
-            elapsed
         );
 
         Ok(output_buffer)
