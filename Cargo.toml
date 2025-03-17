@@ -12,8 +12,8 @@ categories = ["multimedia"]
 [dependencies]
 log = "0.4"
 byteorder = "1.4"
-mp4 = "0.14.0"
 approx = "0.5.1"
+mp4 = { git = "https://github.com/morphkurt/mp4-rust.git" }
 
 [dev-dependencies]
 tempfile = "3.3"
