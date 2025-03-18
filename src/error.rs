@@ -9,16 +9,16 @@ use std::error::Error as StdError;
 pub enum Error {
     /// An I/O error occurred.
     Io(io::Error),
-    
+
     /// The input file is not a valid MP4 file.
     InvalidMp4(String),
-    
+
     /// No audio stream was found in the MP4 file.
     NoAudioStream,
-    
+
     /// The audio stream uses an unsupported codec.
     UnsupportedCodec(String),
-    
+
     /// An error occurred while parsing the MP4 file structure.
     ParsingError(String),
 }

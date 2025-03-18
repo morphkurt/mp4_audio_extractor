@@ -8,10 +8,10 @@ pub fn get_sample_path(filename: &str) -> PathBuf {
     path.push("tests");
     path.push("samples");
     path.push(filename);
-    
+
     if !path.exists() {
         panic!("Test sample not found: {}", path.display());
     }
-    
+
     path
 }

@@ -1,14 +1,14 @@
 //! # MP4 Audio Extractor
-//! 
+//!
 //! A library for extracting audio streams from MP4 container files.
-//! 
+//!
 //! ## Basic Usage
-//! 
+//!
 //! ```rust,no_run
 //! use std::fs::File;
 //! use std::io::BufReader;
 //! use mp4_audio_extractor::Extractor;
-//! 
+//!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let file = File::open("video.mp4")?;
 //!     let size = file.metadata().unwrap().len();
