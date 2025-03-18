@@ -1,5 +1,6 @@
 //! Core functionality for extracting audio from MP4 files.
 
+use mp4::OpusConfig;
 use mp4::{AacConfig, MediaConfig, MediaType, Mp4Config, Mp4Writer, TrackConfig};
 use std::io::{BufReader, Cursor, Read, Seek};
 
@@ -176,6 +177,47 @@ impl Extractor {
                     })?;
                     
                     log::debug!("Added AAC audio track {} to output", track_id);
+                },
+                Ok(MediaType::OPUS) => {
+                    // Get audio profile or return error if not available
+          
+                    // Get frequency index or return error if not available
+                    let freq_index = match track.sample_freq_index() {
+                        Ok(index) => index,
+                        Err(_) => return Err(Error::ParsingError("Failed to get frequency index".to_string())),
+                    };
+                    
+                    // Get channel configuration or return error if not available
+                    let chan_conf = match track.channel_config() {
+                        Ok(conf) => conf,
+                        Err(_) => return Err(Error::ParsingError("Failed to get channel config".to_string())),
+                    };
+
+                    let media_conf = MediaConfig::OpusConfig(OpusConfig {
+                        bitrate: track.bitrate(),
+                        freq_index,
+                        chan_conf,
+                        pre_skip: 0,
+                    });
+
+                    // Get track type or return error if not available
+                    let track_type = match track.track_type() {
+                        Ok(t_type) => t_type,
+                        Err(_)  => return Err(Error::ParsingError("Failed to get track type".to_string())),
+                    };
+
+                    let track_conf = TrackConfig {
+                        track_type: track_type,
+                        timescale: track.timescale(),
+                        language: track.language().to_string(),
+                        media_conf,
+                    };
+            
+                    writer.add_track(&track_conf).map_err(|e| {
+                        Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
+                    })?;
+                    
+                    log::debug!("Added OPUS audio track {} to output", track_id);
                 },
                 _ => {
                     log::debug!("Skipping non-AAC track {}", track_id);
