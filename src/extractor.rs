@@ -158,10 +158,6 @@ impl Extractor {
                         profile: audio_profile,
                         freq_index: freq_index,
                         chan_conf: chan_conf,
-                        es_id: track.trak.mdia.minf.stbl.stsd.mp4a.as_ref().unwrap().esds.as_ref().unwrap().es_desc.es_id,
-                        object_type_indication: track.trak.mdia.minf.stbl.stsd.mp4a.as_ref().unwrap().esds.as_ref().unwrap().es_desc.dec_config.object_type_indication,
-                        stream_type: track.trak.mdia.minf.stbl.stsd.mp4a.as_ref().unwrap().esds.as_ref().unwrap().es_desc.dec_config.stream_type,
-                        buffer_size_db: track.trak.mdia.minf.stbl.stsd.mp4a.as_ref().unwrap().esds.as_ref().unwrap().es_desc.dec_config.buffer_size_db,
                     });
 
                     // Get track type or return error if not available
