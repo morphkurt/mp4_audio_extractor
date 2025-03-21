@@ -54,7 +54,7 @@ impl Extractor {
             .map_err(|e| Error::ParsingError(format!("Failed to parse MP4 header: {}", e)))?;
 
         // Create output buffer with a reasonable initial capacity
-        let estimated_size = (size / 4).max(1024 * 1024);
+        let estimated_size = (size).max(1024 * 1024);
         let mut output_buffer = Vec::with_capacity(estimated_size as usize);
         let output_cursor = Cursor::new(&mut output_buffer);
 
