@@ -29,6 +29,27 @@ fn test_extract_audio_from_valid_mp4() {
 }
 
 #[test]
+fn test_trim_from_valid_mp4() {
+    let file_path = test_samples::get_sample_path("sample1.mp4");
+    let file = File::open(file_path).unwrap();
+    let size = file.metadata().unwrap().len();
+    let reader = BufReader::new(file);
+
+    let extractor = Extractor::new();
+    let result: Result<Vec<u8>, Error> = extractor.trim(reader, size, 6_900_000, 54_700_000);
+
+    assert!(
+        result.is_ok(),
+        "Failed to trim: {:?}",
+        result.err()
+    );
+
+    let trim_data = result.unwrap();
+
+    assert!(!trim_data.is_empty(), "Extracted trim data is empty");
+}
+
+#[test]
 fn test_extract_audio_from_opus_mp4() {
     env_logger::init();
 

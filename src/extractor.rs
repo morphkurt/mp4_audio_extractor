@@ -1,7 +1,8 @@
 //! Core functionality for extracting audio from MP4 files.
 
 use mp4::{AacConfig, MediaConfig, MediaType, Mp4Config, Mp4Writer, TrackConfig};
-use mp4::{AvcConfig, Bytes, HevcConfig, Mp4Sample, OpusConfig, Vp9Config};
+use mp4::{AvcConfig, HevcConfig, OpusConfig, Vp9Config};
+use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read, Seek};
 use std::vec;
 
@@ -24,6 +25,11 @@ pub struct ExtractorConfig {
 /// The main extractor struct responsible for extracting audio from MP4 files.
 #[derive(Debug)]
 pub struct Extractor {}
+
+#[derive(Debug)]
+struct SampleConfig {
+    start_offset: u64,
+}
 
 impl Extractor {
     /// Creates a new extractor with default configuration.
@@ -64,9 +70,31 @@ impl Extractor {
             .map_err(|e| Error::ParsingError(format!("Failed to create MP4 writer: {}", e)))?;
 
         // Find and configure audio tracks
-        self.configure_tracks(&mut mp4, &mut writer, false)?;
+        let track_map: HashMap<u32, u32> = self.configure_tracks(&mut mp4, &mut writer, false)?;
 
-        return Ok(Vec::new());
+        let sample_config = self.process_samples(
+            start_time_us,
+            end_time_us,
+            &mut mp4,
+            &mut writer,
+            &track_map,
+        )?;
+
+        for (k, v) in sample_config {
+            let index = track_map.get(&k).unwrap();
+            let _ = writer.update_offset(*index - 1, v.start_offset, end_time_us - start_time_us);
+        }
+
+        writer
+            .write_end()
+            .map_err(|e| Error::ParsingError(format!("Failed to finalize MP4 file: {}", e)))?;
+
+        log::info!(
+            "Successfully created MP4 data in memory with extracted audio: {}",
+            output_buffer.len(),
+        );
+
+        Ok(output_buffer)
     }
 
     /// Extracts audio data from an MP4 file using a BufReader.
@@ -135,7 +163,7 @@ impl Extractor {
             .map_err(|e| Error::ParsingError(format!("Failed to create MP4 writer: {}", e)))?;
 
         // Find and configure audio tracks
-        self.configure_tracks(&mut mp4, &mut writer, true)?;
+        _ = self.configure_tracks(&mut mp4, &mut writer, true)?;
 
         // Process all samples
         self.process_audio_samples(track_id, total_samples, &mut mp4, &mut writer)?;
@@ -173,7 +201,8 @@ impl Extractor {
         mp4: &mut mp4::Mp4Reader<R>,
         writer: &mut Mp4Writer<Cursor<&mut Vec<u8>>>,
         audio_only: bool,
-    ) -> Result<()> {
+    ) -> Result<HashMap<u32, u32>> {
+        let mut map: HashMap<u32, u32> = HashMap::new();
         for (track_id, track) in mp4.tracks() {
             match track.media_type() {
                 Ok(MediaType::AAC) => {
@@ -229,9 +258,11 @@ impl Extractor {
                         media_conf,
                     };
 
-                    writer.add_track(&track_conf).map_err(|e| {
+                    let id = writer.add_track(&track_conf).map_err(|e| {
                         Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
                     })?;
+
+                    map.insert(*track_id, id);
 
                     log::debug!("Added AAC audio track {} to output", track_id);
                 }
@@ -279,10 +310,11 @@ impl Extractor {
                     };
 
                     if !audio_only {
-                        writer.add_track(&track_conf).map_err(|e| {
+                        let id = writer.add_track(&track_conf).map_err(|e| {
                             Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
                         })?;
 
+                        map.insert(*track_id, id);
                         log::debug!("Added AVC audio track {} to output", track_id);
                     }
                 }
@@ -308,10 +340,11 @@ impl Extractor {
                     };
 
                     if !audio_only {
-                        writer.add_track(&track_conf).map_err(|e| {
+                        let id = writer.add_track(&track_conf).map_err(|e| {
                             Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
                         })?;
 
+                        map.insert(*track_id, id);
                         log::debug!("Added HEVC audio track {} to output", track_id);
                     }
                 }
@@ -337,10 +370,11 @@ impl Extractor {
                     };
 
                     if !audio_only {
-                        writer.add_track(&track_conf).map_err(|e| {
+                        let id = writer.add_track(&track_conf).map_err(|e| {
                             Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
                         })?;
 
+                        map.insert(*track_id, id);
                         log::debug!("Added VP9 audio track {} to output", track_id);
                     }
                 }
@@ -389,10 +423,11 @@ impl Extractor {
                         media_conf,
                     };
 
-                    writer.add_track(&track_conf).map_err(|e| {
+                    let id = writer.add_track(&track_conf).map_err(|e| {
                         Error::ParsingError(format!("Failed to add track {}: {}", track_id, e))
                     })?;
 
+                    map.insert(*track_id, id);
                     log::debug!("Added OPUS audio track {} to output", track_id);
                 }
                 _ => {
@@ -402,73 +437,47 @@ impl Extractor {
             }
         }
 
-        Ok(())
+        Ok(map)
     }
 
     /// Processes all samples from the input track to the output.
     fn process_samples<R: Read + Seek>(
         &self,
-        total_samples: u32,
         start_time_us: u64,
         end_time_us: u64,
         mp4: &mut mp4::Mp4Reader<R>,
         writer: &mut Mp4Writer<Cursor<&mut Vec<u8>>>,
-    ) -> Result<()> {
-        let mut processed_samples = 0;
-        let log_interval = (total_samples / 10).max(1); // Log progress every 10%
-      
+        map: &HashMap<u32, u32>,
+    ) -> Result<HashMap<u32, SampleConfig>> {
+        let mut sample_config_map: HashMap<u32, SampleConfig> = HashMap::new();
         let track_ids = mp4
-            .tracks()
-            .into_iter()
-            .map(|t| (t.1.track_id(), t.1.timescale()))
-            .collect::<Vec<(u32,u32)>>();
-        for (id, timescale) in track_ids {
+            .moov
+            .traks
+            .iter()
+            .map(|t| (t.tkhd.track_id, t.mdia.mdhd.timescale))
+            .collect::<Vec<(u32, u32)>>();
+        for (track_id, timescale) in track_ids {
             let start_time = (start_time_us * timescale as u64) / 1_000_000;
             let end_time = (end_time_us * timescale as u64) / 1_000_000;
-            let mut prev_sync_sample = 0;
-            let mut curr_time: u32 = 0;
-            let mut late_write = false;
-            for sample_id in 1..=total_samples {
-                match mp4.read_sample(id, sample_id) {
+            let mut curr_time: u64 = 0;
+            let mut offset: u64 = 0;
+            let mut buffered_samples: Vec<u32> = Vec::new();
+            for sample_id in 1..=mp4.sample_count(track_id).unwrap_or(0) {
+                match mp4.read_sample(track_id, sample_id) {
                     Ok(Some(sample)) => {
-                        curr_time+= sample.duration;
-                        if (curr_time < start_time as u32) {
-                            late_write = true;
+                        curr_time += sample.duration as u64;
+                        if curr_time > end_time {
+                            continue;
+                        }
+                        if curr_time < start_time {
                             if sample.is_sync {
-                                prev_sync_sample = sample_id;
+                                offset = start_time.saturating_sub(curr_time);
+                                buffered_samples.clear();
                             }
-                        } else {
-                            if late_write {
-                                for buffred_id in prev_sync_sample..sample_id-1 {
-
-                                }
-                            }
-                        // Write the sample data to the output MP4
-                        writer.write_sample(1, &sample).map_err(|e| {
-                            Error::ParsingError(format!(
-                                "Failed to write sample {}: {}",
-                                sample_id, e
-                            ))
-                        })?;
-
+                            buffered_samples.push(sample_id);
+                            continue;
                         }
-                      
-                      
-                        processed_samples += 1;
-
-                        // Log progress periodically
-                        if processed_samples % log_interval == 0
-                            || processed_samples == total_samples
-                        {
-                            let progress =
-                                (processed_samples as f64 / total_samples as f64) * 100.0;
-                            log::info!(
-                                "Processing progress: {:.1}% ({}/{})",
-                                progress,
-                                processed_samples,
-                                total_samples
-                            );
-                        }
+                        buffered_samples.push(sample_id);
                     }
                     Ok(None) => {
                         log::warn!("Sample {} not found, stopping extraction", sample_id);
@@ -482,14 +491,23 @@ impl Extractor {
                     }
                 }
             }
+            for buffred_id in &buffered_samples {
+                let s = mp4.read_sample(track_id, *buffred_id).unwrap().unwrap();
+                writer
+                    .write_sample(*map.get(&track_id).unwrap(), &s)
+                    .map_err(|e| {
+                        Error::ParsingError(format!("Failed to write sample {}: {}", buffred_id, e))
+                    })?;
+                //     println!("writting buffered sample id {}, track id {}, is_key {}, render {}",buffred_id, track_id, s.is_sync, s.rendering_offset);
+            }
+            sample_config_map.insert(
+                track_id,
+                SampleConfig {
+                    start_offset: offset,
+                },
+            );
         }
-
-        log::info!(
-            "Successfully processed {} out of {} samples",
-            processed_samples,
-            total_samples
-        );
-        Ok(())
+        Ok(sample_config_map)
     }
 
     /// Processes all samples from the input track to the output.

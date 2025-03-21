@@ -1,8 +1,8 @@
 //! Error handling for the MP4 audio extractor.
 
+use std::error::Error as StdError;
 use std::fmt;
 use std::io;
-use std::error::Error as StdError;
 
 /// Errors that can occur during MP4 audio extraction.
 #[derive(Debug)]
