@@ -463,7 +463,7 @@ impl Extractor {
             let mut offset: u64 = 0;
             let mut buffered_samples: Vec<u32> = Vec::new();
             for sample_id in 1..=mp4.sample_count(track_id).unwrap_or(0) {
-                match mp4.read_sample(track_id, sample_id) {
+                match mp4.read_sample_metadata(track_id, sample_id) {
                     Ok(Some(sample)) => {
                         curr_time += sample.duration as u64;
                         if curr_time > end_time {
